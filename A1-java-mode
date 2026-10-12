@@ -1,0 +1,405 @@
+// PROJECTILE MOTION GAME - Processing (Java Mode)
+
+float angle = 45.0;
+float velocity = 50.0;
+
+float g = 9.8;
+float scaleVal = 3.0; 
+float dt = 0.05;
+
+float posX = 50.0;
+float posY = 0.0;
+
+float vx = 0.0;
+float vy = 0.0;
+
+boolean isFired = false;
+boolean hasShot = false;
+
+int score = 0;
+int attempts = 0;
+
+PVector target;
+String resultMessage = "";
+
+float btnFireX = 20;
+float btnFireY = 90;
+float btnW = 80;
+float btnH = 30;
+
+float btnLockAngleX = 110;
+float btnLockAngleY = 90;
+float btnLockAngleW = 120;
+float btnLockAngleH = 30;
+
+float btnLockVelX = 240;
+float btnLockVelY = 90;
+float btnLockVelW = 120;
+float btnLockVelH = 30;
+
+float btnCenterW = 160;
+float btnCenterH = 40;
+
+ArrayList<PVector> pathHistory = new ArrayList<PVector>();
+
+void setup() {
+  size(850, 600);
+  newTarget();
+}
+
+void draw() {
+  background(220, 240, 255);
+
+  drawEnvironment();
+  drawTarget();
+  drawUI();
+
+  if (isFired) {
+    updatePhysics();
+    checkCollision();
+  } else if (!hasShot) {
+    drawAimLine();
+  }
+
+  drawPath();
+  drawBullet();
+
+  if (resultMessage.equals("MISSED!")) {
+    drawCenterButton("RESET TRY", color(220, 50, 50));
+  } else if (resultMessage.equals("HIT! +100")) {
+    drawCenterButton("NEXT TARGET", color(40, 180, 80));
+  }
+}
+
+void drawEnvironment() {
+  noStroke();
+  fill(135, 206, 235);
+  rect(0, 0, width, height - 50);
+  fill(200, 230, 255);
+  rect(0, height / 2, width, (height / 2) - 50);
+
+  fill(255, 255, 255, 220);
+  ellipse(180, 100, 70, 40);
+  ellipse(210, 90, 50, 35);
+  ellipse(150, 105, 50, 30);
+
+  ellipse(600, 120, 90, 45);
+  ellipse(640, 110, 60, 40);
+  ellipse(560, 125, 60, 35);
+
+  fill(130, 160, 190);
+  triangle(100, height - 50, 250, 280, 400, height - 50);
+  triangle(300, height - 50, 480, 220, 650, height - 50);
+
+  fill(100, 135, 170);
+  triangle(500, height - 50, 680, 250, 850, height - 50);
+
+  fill(120, 85, 50);
+  rect(0, height - 50, width, 50);
+  fill(80, 180, 70);
+  rect(0, height - 50, width, 12);
+
+  drawCannon();
+}
+
+void drawCannon() {
+  pushMatrix();
+  translate(50, height - 50);
+
+  pushMatrix();
+  rotate(radians(-angle));
+
+  fill(50);
+  rect(0, -12, 55, 24, 4);
+  fill(90);
+  rect(5, -9, 45, 18, 2);
+
+  fill(30);
+  rect(50, -15, 8, 30, 2);
+  popMatrix();
+
+  fill(100, 60, 20);
+  triangle(-25, 0, 15, 0, -5, -20);
+
+  fill(140, 85, 35);
+  ellipse(0, 0, 36, 36);
+  fill(180, 120, 60);
+  ellipse(0, 0, 24, 24);
+  fill(60);
+  ellipse(0, 0, 8, 8);
+
+  popMatrix();
+}
+
+void autoAimLockAngle() {
+  if (hasShot) return;
+
+  float X = (target.x - 50) / scaleVal;
+  float Y = ((height - 50) - target.y) / scaleVal;
+
+  float rad = radians(angle);
+  float denom = 2 * pow(cos(rad), 2) * (X * tan(rad) - Y);
+
+  if (denom <= 0) {
+    float minAngleRad = atan2(Y, X) + radians(10);
+    angle = degrees(minAngleRad);
+    angle = constrain(angle, 5, 85);
+    rad = radians(angle);
+    denom = 2 * pow(cos(rad), 2) * (X * tan(rad) - Y);
+  }
+
+  if (denom > 0) {
+    velocity = sqrt((g * X * X) / denom);
+    fireCannon();
+  }
+}
+
+void autoAimLockVel() {
+  if (hasShot) return;
+
+  float X = (target.x - 50) / scaleVal;
+  float Y = ((height - 50) - target.y) / scaleVal;
+
+  float v2 = velocity * velocity;
+  float disc = (v2 * v2) - g * (g * X * X + 2 * Y * v2);
+
+  if (disc < 0) {
+    float minV = sqrt(g * (Y + sqrt(X * X + Y * Y)));
+    velocity = ceil(minV) + 1;
+    v2 = velocity * velocity;
+    disc = (v2 * v2) - g * (g * X * X + 2 * Y * v2);
+  }
+
+  if (disc >= 0) {
+    float tanTheta = (v2 - sqrt(disc)) / (g * X);
+    angle = degrees(atan(tanTheta));
+    angle = constrain(angle, 1, 89);
+    fireCannon();
+  }
+}
+
+void fireCannon() {
+  if (hasShot) return;
+
+  float rad = radians(angle);
+  vx = velocity * cos(rad);
+  vy = -velocity * sin(rad);
+
+  isFired = true;
+  hasShot = true;
+  attempts += 1;
+  resultMessage = "";
+}
+
+void resetCannon() {
+  posX = 50.0;
+  posY = height - 50;
+
+  vx = 0.0;
+  vy = 0.0;
+
+  isFired = false;
+  hasShot = false;
+  pathHistory.clear();
+  resultMessage = "";
+}
+
+void newTarget() {
+  target = new PVector(random(400, 750), random(200, 500));
+  resetCannon();
+}
+
+void updatePhysics() {
+  vy += g * dt;
+
+  posX += vx * dt * scaleVal;
+  posY += vy * dt * scaleVal;
+
+  pathHistory.add(new PVector(posX, posY));
+
+  if (posY >= height - 50 || posX >= width) {
+    if (posY >= height - 50) {
+      posY = height - 50;
+    }
+
+    vx = 0;
+    vy = 0;
+    isFired = false;
+
+    if (!resultMessage.equals("HIT! +100")) {
+      resultMessage = "MISSED!";
+    }
+  }
+}
+
+void checkCollision() {
+  float d = dist(posX, posY, target.x, target.y);
+
+  if (d <= 25) {
+    score += 100;
+    vx = 0;
+    vy = 0;
+    isFired = false;
+    resultMessage = "HIT! +100";
+  }
+}
+
+void drawPath() {
+  fill(100);
+  noStroke();
+  for (PVector p : pathHistory) {
+    ellipse(p.x, p.y, 4, 4);
+  }
+}
+
+void drawAimLine() {
+  stroke(255, 0, 0);
+  strokeWeight(2);
+  float rad = radians(angle);
+  line(50, height - 50, 50 + cos(rad) * 50, (height - 50) - sin(rad) * 50);
+  noStroke();
+}
+
+void drawBullet() {
+  fill(50);
+  ellipse(posX, posY, 16, 16);
+}
+
+void drawTarget() {
+  fill(255, 50, 50);
+  ellipse(target.x, target.y, 30, 30);
+
+  fill(255);
+  ellipse(target.x, target.y, 15, 15);
+
+  float targetDx_m = (target.x - 50) / scaleVal;
+  float targetDy_m = ((height - 50) - target.y) / scaleVal;
+
+  fill(0);
+  textSize(12);
+  textAlign(CENTER);
+  text(String.format("Target: (%.1fm, %.1fm)", targetDx_m, targetDy_m), target.x, target.y - 25);
+  textAlign(LEFT);
+}
+
+void drawUI() {
+  fill(0);
+  textSize(14);
+  text(String.format("Angle (UP/DOWN): %.1f deg", angle), 20, 30);
+  text(String.format("Velocity (LEFT/RIGHT): %.1f m/s", velocity), 20, 50);
+
+  fill(150, 0, 150);
+  text(String.format("g = %.1f m/s^2", g), 20, 75);
+
+  fill(0, 100, 200);
+  textSize(16);
+  text("SCORE: " + score, 480, 30);
+  text("ATTEMPTS: " + attempts, 480, 50);
+
+  float targetDx_m = (target.x - 50) / scaleVal;
+  float targetDy_m = ((height - 50) - target.y) / scaleVal;
+
+  textSize(14);
+  fill(0);
+  text(String.format("Target Offset (X, Y): (%.1f m, %.1f m)", targetDx_m, targetDy_m), 480, 75);
+
+  fill(0, 150, 255);
+  rect(btnFireX, btnFireY, btnW, btnH, 5);
+  fill(255);
+  textSize(14);
+  text("FIRE", btnFireX + 22, btnFireY + 20);
+
+  fill(150, 50, 200);
+  rect(btnLockAngleX, btnLockAngleY, btnLockAngleW, btnLockAngleH, 5);
+  fill(255);
+  text("AIM (LOCK DEG)", btnLockAngleX + 10, btnLockAngleY + 20);
+
+  fill(200, 100, 0);
+  rect(btnLockVelX, btnLockVelY, btnLockVelW, btnLockVelH, 5);
+  fill(255);
+  text("AIM (LOCK VEL)", btnLockVelX + 10, btnLockVelY + 20);
+
+  if (!resultMessage.equals("")) {
+    textAlign(CENTER, CENTER);
+    textSize(40);
+
+    if (resultMessage.equals("MISSED!")) {
+      fill(220, 50, 50);
+    } else {
+      fill(0, 150, 0);
+    }
+
+    text(resultMessage, width / 2, height / 2 - 30);
+    textAlign(LEFT);
+  }
+}
+
+void drawCenterButton(String labelText, color btnColor) {
+  rectMode(CENTER);
+  fill(btnColor);
+  rect(width / 2, height / 2 + 30, btnCenterW, btnCenterH, 8);
+
+  fill(255);
+  textSize(16);
+  textAlign(CENTER, CENTER);
+  text(labelText, width / 2, height / 2 + 30);
+
+  rectMode(CORNER);
+  textAlign(LEFT);
+}
+
+void keyPressed() {
+  if (!hasShot) {
+    if (keyCode == UP && angle < 90) {
+      angle += 2;
+    } else if (keyCode == DOWN && angle > 0) {
+      angle -= 2;
+    } else if (keyCode == RIGHT) {
+      velocity += 2;
+    } else if (keyCode == LEFT && velocity > 2) {
+      velocity -= 2;
+    } else if (key == ' ') {
+      fireCannon();
+    } else if (key == '1' || key == 'a' || key == 'A') {
+      autoAimLockAngle();
+    } else if (key == '2' || key == 'v' || key == 'V') {
+      autoAimLockVel();
+    }
+  }
+
+  if (key == 'r' || key == 'R') {
+    resetCannon();
+  }
+}
+
+void mousePressed() {
+  if (!resultMessage.equals("")) {
+    if (mouseX >= width / 2 - btnCenterW / 2 && mouseX <= width / 2 + btnCenterW / 2 &&
+        mouseY >= height / 2 + 30 - btnCenterH / 2 && mouseY <= height / 2 + 30 + btnCenterH / 2) {
+      if (resultMessage.equals("MISSED!")) {
+        resetCannon();
+      } else if (resultMessage.equals("HIT! +100")) {
+        newTarget();
+      }
+      return;
+    }
+  }
+
+  if (mouseX >= btnFireX && mouseX <= btnFireX + btnW &&
+      mouseY >= btnFireY && mouseY <= btnFireY + btnH) {
+    fireCannon();
+    return;
+  }
+
+  if (mouseX >= btnLockAngleX && mouseX <= btnLockAngleX + btnLockAngleW &&
+      mouseY >= btnLockAngleY && mouseY <= btnLockAngleY + btnLockAngleH) {
+    autoAimLockAngle();
+    return;
+  }
+
+  if (mouseX >= btnLockVelX && mouseX <= btnLockVelX + btnLockVelW &&
+      mouseY >= btnLockVelY && mouseY <= btnLockVelY + btnLockVelH) {
+    autoAimLockVel();
+    return;
+  }
+}
